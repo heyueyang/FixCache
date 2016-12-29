@@ -101,7 +101,7 @@ public class DatabaseManager {
                 ResultSet r2 = stmt2
                         .executeQuery("select file_id from actions where commit_id =" + commitId);
                 while (r2.next()) {
-                    System.out.print(r2.getInt(1));
+                    System.out.println(r2.getInt(1));
                 }
             }
         } catch (Exception e) {

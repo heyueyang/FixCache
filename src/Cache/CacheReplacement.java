@@ -23,7 +23,7 @@ public class CacheReplacement {
     Policy currentPolicy;
     protected Comparator<CacheItem> compareFunc;
     protected ComparatorLRU tiebreaker = new ComparatorLRU();
-
+    //替换策略实现函数
     public CacheReplacement(Policy p) {
         currentPolicy = p;
 

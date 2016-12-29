@@ -19,18 +19,18 @@ public class Simulator {
      */
 
     static final String findCommit = "select id, date, is_bug_fix from scmlog "
-        + "where repository_id =? and date between ? and ? order by date ASC";
+        + "where repository_id =? and date between ? and ? order by date ASC";//查找scmlog表中出指定时间段内所有的commit记录，按照时间从前到后排序
     static final String findFile = "select actions.file_id, type from actions, content_loc "
         + "where actions.file_id=content_loc.file_id "
         + "and actions.commit_id=? and content_loc.commit_id=? "
         + "and actions.file_id in( "
-        + "select file_id from file_types where type='code') order by loc DESC";
-    static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";
+        + "select file_id from file_types where type='code') order by loc DESC";//查找出指定commit_id下，所有的action记录，按照更改行数降序排序
+    static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";//查找hunk表中是否有指定file_id和commit_id的记录
     static final String findBugIntroCdate = "select date from hunk_blames, scmlog "
-        + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";
-    static final String findPid = "select id from repositories where id=?";
+        + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";//查找指定hunk_id，该hunk出现的commit发生的时间
+    static final String findPid = "select id from repositories where id=?";//查找是否有指定id的工程
     static final String findFileCount = "select count(files.id) from files, file_types "
-        + "where files.id = file_types.file_id and type = 'code' and repository_id=?";
+        + "where files.id = file_types.file_id and type = 'code' and repository_id=?";//查找指定id的工程中，所有的file_id的个数
     private static PreparedStatement findCommitQuery;
     private static PreparedStatement findFileQuery;
     private static PreparedStatement findHunkIdQuery;
@@ -79,32 +79,32 @@ public class Simulator {
         int onepercent = getPercentOfFiles(pid);
 
         if (bsize == -1)
-            blocksize = onepercent*5;
+            blocksize = onepercent*5;//默认的blocksize为总文件数量的5%
         else
             blocksize = bsize;
         if (csize == -1)
-            cachesize = onepercent*10; 
+            cachesize = onepercent*10; //默认的cachesize为总文件数量的10%
         else
             cachesize = csize;
         if (psize == -1)
-            prefetchsize = onepercent;
+            prefetchsize = onepercent;//默认的prefetchsize为总文件数量的1%
         else
             prefetchsize = psize;
 
         cacheRep = rep;
 
-        start = findFirstDate(start, pid);
-        end = findLastDate(end, pid);
+        start = findFirstDate(start, pid);//获取最早日期
+        end = findLastDate(end, pid);//获取最晚日期
 
 
         cache = new Cache(cachesize, new CacheReplacement(rep), start, end,
-                projid);
+                projid);//初始化cache
         outputDate = cache.startDate;
 
         hit = 0;
         miss = 0;
         this.saveToFile = save;
-
+        //如果结果要输出到文件，设置文件路径以及注释的等内容
         if (saveToFile == true) {
             filename = pid + "_" + cachesize + "_" + blocksize + "_"
             + prefetchsize + "_" + cacheRep;
@@ -175,17 +175,17 @@ public class Simulator {
     // could add if (reas == BugEntity) logic to add() code
     public void loadBuggyEntity(int fileId, int cid, String commitDate, String intro_cdate) {
 
-        if (cache.contains(fileId))
+        if (cache.contains(fileId))//计算是否命中
             hit++; 
         else
             miss++;
 
-        cache.add(fileId, cid, commitDate, CacheItem.CacheReason.BugEntity);
+        cache.add(fileId, cid, commitDate, CacheItem.CacheReason.BugEntity);//时间局部性，将自身加入cache
 
         // add the co-changed files as well
         ArrayList<Integer> cochanges = CoChange.getCoChangeFileList(fileId,
                 cache.startDate, intro_cdate, blocksize);
-        cache.add(cochanges, cid, commitDate, CacheItem.CacheReason.CoChange);
+        cache.add(cochanges, cid, commitDate, CacheItem.CacheReason.CoChange);//空间局部性，将co-change的记录加入cache
     }
 
     /**
@@ -211,8 +211,8 @@ public class Simulator {
             findCommitQuery.setString(3, cache.endDate);
 
             // returns all commits to pid after cache.startDate
-            allCommits = findCommitQuery.executeQuery();
-
+            allCommits = findCommitQuery.executeQuery();//获取scmlog表中，该工程的所有commit记录
+            //遍历所有commit记录
             while (allCommits.next()) {
                 commits++;
                 cid = allCommits.getInt(1);
@@ -224,7 +224,7 @@ public class Simulator {
 
                 final ResultSet files = findFileQuery.executeQuery();
                 // loop through those file ids
-                while (files.next()) {
+                while (files.next()) {//遍历该commit_id涉及的所有action
                     file_id = files.getInt(1);
                     type = FileType.valueOf(files.getString(2));
                     numprefetch = processOneFile(cid, cdate, isBugFix, file_id,
@@ -277,21 +277,21 @@ public class Simulator {
         case R:
         case C:
         case A:
-            if (numprefetch < prefetchsize) {
-                numprefetch++;
-                cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);
+            if (numprefetch < prefetchsize) {//添加局部性
+                numprefetch++;//预加载计数器加1
+                cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);//将该条记录加入cache
             }
             break;
         case D:
             if(cache.contains(file_id)){
-                this.cache.remove(file_id, cdate);
+                this.cache.remove(file_id, cdate);//如果文件被删除，要从cache中移除
             }
             break;
         case M: // modified
-            if (isBugFix) {
-                String intro_cdate = this.getBugIntroCdate(file_id, cid);
-                this.loadBuggyEntity(file_id, cid, cdate, intro_cdate);
-            } else if (numprefetch < prefetchsize) {
+            if (isBugFix) {//如果这条记录是修复bug的记录
+                String intro_cdate = this.getBugIntroCdate(file_id, cid);//获取该bug被引入的日期
+                this.loadBuggyEntity(file_id, cid, cdate, intro_cdate);//向cache中加载，引入日期的相应的记录
+            } else if (numprefetch < prefetchsize) {//更改局部性
                 numprefetch++;
                 cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);
             }
@@ -532,7 +532,7 @@ public class Simulator {
             printUsage();
             System.exit(2);
         }
-
+        //设置参数
         Integer blksz = (Integer) parser.getOptionValue(blksz_opt, -1);
         Integer csz = (Integer) parser.getOptionValue(csz_opt, -1);
         Integer pfsz = (Integer) parser.getOptionValue(pfsz_opt, -1);
@@ -563,7 +563,7 @@ public class Simulator {
          * Create a new simulator and run simulation.
          */
         Simulator sim;
-
+        //调整参数
         if(tune)
         {
             System.out.println("tuning...");
@@ -574,9 +574,9 @@ public class Simulator {
         else
         {
             sim = new Simulator(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
-            sim.initialPreLoad();
-            sim.simulate();
-
+            sim.initialPreLoad();//预加载
+            sim.simulate();//进行仿真
+            //保存结果
             if(sim.saveToFile==true)
             {
                 sim.csvWriter.close();
