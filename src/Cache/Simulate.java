@@ -1,6 +1,5 @@
 package Cache;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -13,7 +12,7 @@ import Util.CmdLineParser;
 import Cache.CacheItem.CacheReason;
 import Database.DatabaseManager;
 
-public class Simulator {
+public class Simulate {
 
     /**
      * Database prepared sql statements.
@@ -25,9 +24,9 @@ public class Simulator {
         + "where actions.file_id=content_loc.file_id "
         + "and actions.commit_id=? and content_loc.commit_id=? "
         + "and actions.file_id in( "
-        + "select file_id from file_types where type='code') order by loc DESC";//查找出指定commit_id下，所有的action记录，按照文件源码行数降序排序
+        + "select file_id from file_types where type='code') order by loc DESC";//查找出指定commit_id下，所有的action记录，按照更改行数降序排序
     static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";//查找hunk表中是否有指定file_id和commit_id的记录
-    static final String findBugIntroCdate = "select commit_date from hunk_blames, scmlog "
+    static final String findBugIntroCdate = "select date from hunk_blames, scmlog "
         + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";//查找指定hunk_id，该hunk出现的commit发生的时间
     static final String findPid = "select id from repositories where id=?";//查找是否有指定id的工程
     static final String findFileCount = "select count(files.id) from files, file_types "
@@ -38,8 +37,6 @@ public class Simulator {
     static PreparedStatement findBugIntroCdateQuery;
     static PreparedStatement findPidQuery;
     static PreparedStatement findFileCountQuery;
-    static String[] projects = {"ant","camel"};
-    static String result_dir = "Results/";
 
     /**
      * From the actions table. See the cvsanaly manual
@@ -60,7 +57,7 @@ public class Simulator {
     final boolean saveToFile; // whether there should be csv output
     final CacheReplacement.Policy cacheRep; // cache replacement policy
     final Cache cache; // the cache
-    static Connection conn = DatabaseManager.getConnection(); // for database
+    final static Connection conn = DatabaseManager.getConnection(); // for database
 
     int hit;
     int miss;
@@ -75,7 +72,7 @@ public class Simulator {
     int fileCount; // XXX where is this set? why static?
     String filename;
 
-    public Simulator(int bsize, int psize, int csize, int projid,
+    public Simulate(int bsize, int psize, int csize, int projid,
             CacheReplacement.Policy rep, String start, String end, Boolean save) {
 
         pid = projid;        
@@ -111,7 +108,7 @@ public class Simulator {
         if (saveToFile == true) {
             filename = pid + "_" + cachesize + "_" + blocksize + "_"
             + prefetchsize + "_" + cacheRep;
-            csvWriter = new CsvWriter(result_dir + filename + "_hitrate.csv");
+            csvWriter = new CsvWriter("Results/" + filename + "_hitrate.csv");
             csvWriter.setComment('#');
             try {
                 csvWriter.writeComment("hitrate for every 3 months, "
@@ -177,7 +174,7 @@ public class Simulator {
     // XXX move hit and miss to the cache?
     // could add if (reas == BugEntity) logic to add() code
     public void loadBuggyEntity(int fileId, int cid, String commitDate, String intro_cdate) {
-    	//System.out.println(fileId  + "->" + cid + ":" + commitDate + "---" + intro_cdate);
+
         if (cache.contains(fileId))//计算是否命中
             hit++; 
         else
@@ -323,13 +320,21 @@ public class Simulator {
      * input: pre-fetch size
      */
     public void initialPreLoad() {
-    	//按照初始时刻文件源码的行数代销降序排序，将文件行数最大的那些加载进内存
-        final String findInitialPreload = "select content_loc.file_id, content_loc.commit_id "
+
+        /*final String findInitialPreload = "select content_loc.file_id, content_loc.commit_id "
             + "from content_loc, scmlog, actions, file_types "
-            + "where repository_id=? and content_loc.commit_id = scmlog.id and commit_date =? "
+            + "where repository_id=? and content_loc.commit_id = scmlog.id and date =? "
             + "and content_loc.file_id=actions.file_id "
             + "and content_loc.commit_id=actions.commit_id and actions.type!='D' "
-            + "and file_types.file_id=content_loc.file_id and file_types.type='code' order by loc DESC";
+            + "and file_types.file_id=content_loc.file_id and file_types.type='code' order by loc DESC";*/
+        //预加载过程
+        //按照更改行数降序排序，将更改行数最大的几条记录加入到cache
+        final String findInitialPreload = "select content_loc.file_id, content_loc.commit_id "
+                + "from content_loc, scmlog, actions, file_types "
+                + "where repository_id=? and content_loc.commit_id = scmlog.id and commit_date =? "
+                + "and content_loc.file_id=actions.file_id "
+                + "and content_loc.commit_id=actions.commit_id and actions.type!='D' "
+                + "and file_types.file_id=content_loc.file_id and file_types.type='code' order by loc DESC";
         final PreparedStatement findInitialPreloadQuery;
         ResultSet r = null;
         int fileId = 0;
@@ -369,7 +374,7 @@ public class Simulator {
         final PreparedStatement findFirstDateQuery;
         String firstDate = "";
         try {
-            if (start == null) {
+        	if (start == null) {
                 findFirstDate = "select min(commit_date) from scmlog where repository_id=?";
                 findFirstDateQuery = conn.prepareStatement(findFirstDate);
                 findFirstDateQuery.setInt(1, pid);
@@ -395,7 +400,7 @@ public class Simulator {
      * Finds the last date before the endDate with repository entries. Only
      * called once per simulation.
      * 
-     * @return The date for the the simulator.
+     * @return The date for the the Simulate.
      */
     private static String findLastDate(String end, int pid) {
         String findLastDate = null;
@@ -403,14 +408,15 @@ public class Simulator {
         String lastDate = null;
         try {
             if (end == null) {
-                findLastDate = "select max(commit_date) from scmlog where repository_id=?";
+                findLastDate = "select max(commit_date) from scmlog";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
-                findLastDateQuery.setInt(1, pid);
+                //findLastDateQuery.setInt(1, pid);
             } else {
-                findLastDate = "select max(commit_date) from scmlog where repository_id=? and commit_date <=?";
+                findLastDate = "select max(commit_date) from scmlog where commit_date <=?";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
-                findLastDateQuery.setInt(1, pid);
-                findLastDateQuery.setString(2, end);
+                //findLastDateQuery.setInt(1, pid);
+                //findLastDateQuery.setString(2, end);
+                findLastDateQuery.setString(1, end);
             }
             lastDate = Util.Database.getStringResult(findLastDateQuery);
         } catch (SQLException e) {
@@ -563,48 +569,39 @@ public class Simulator {
 
         checkParameter(start, end, pid);
         /**
-         * Create a new simulator and run simulation.
+         * Create a new Simulate and run simulation.
          */
-        Simulator sim;
-        for(int i = 0 ; i < projects.length; i++){
-        	System.out.println("===============" + projects[i] + "=================");
-        	conn = DatabaseManager.getConnection(projects[i]); 	//*
-            result_dir = "Results/" + projects[i] + "2/";		//*
-            if(!new File(result_dir).exists()){					//*
-            	new File(result_dir).mkdirs();					//*
-            }													//*
-            
-	        //调整参数
-	        if(tune)
-	        {
-	            System.out.println("tuning...");
-	            sim = tune(pid);
-	            System.out.println(".... finished tuning!");
-	            System.out.println("highest hitrate:"+sim.getHitRate());
-	        }
-	        else
-	        {
-	            sim = new Simulator(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
-	            sim.initialPreLoad();//预加载
-	            sim.simulate();//进行仿真
-	            //保存结果
-	            if(sim.saveToFile==true)
-	            {
-	                sim.csvWriter.close();
-	                sim.outputFileDist();
-	            }
-	
-	        }
-	
-	        // should always happen
-	        //sim.close();
-	        printSummary(sim);
+        Simulate sim;
+        //调整参数
+        if(tune)
+        {
+            System.out.println("tuning...");
+            sim = tune(pid);
+            System.out.println(".... finished tuning!");
+            System.out.println("highest hitrate:"+sim.getHitRate());
         }
+        else
+        {
+            sim = new Simulate(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
+            sim.initialPreLoad();//预加载
+            sim.simulate();//进行仿真
+            //保存结果
+            if(sim.saveToFile==true)
+            {
+                sim.csvWriter.close();
+                sim.outputFileDist();
+            }
+
+        }
+
+        // should always happen
+        sim.close();
+        printSummary(sim);
     }
 
 
-    private static void printSummary(Simulator sim) {
-        System.out.println("Simulator specs:");
+    private static void printSummary(Simulate sim) {
+        System.out.println("Simulate specs:");
         System.out.print("Project....");
         System.out.println(sim.pid);
         System.out.print("Cache size....");
@@ -636,9 +633,9 @@ public class Simulator {
     }
 
 
-    private static Simulator tune(int pid)
+    private static Simulate tune(int pid)
     {
-        Simulator maxsim = null;
+        Simulate maxsim = null;
         double maxhitrate = 0;
         int blksz;
         int pfsz;
@@ -650,7 +647,7 @@ public class Simulator {
 
         for(blksz=onepercent;blksz<UPPER;blksz+=onepercent*2){
             for(pfsz=onepercent;pfsz<UPPER;pfsz+=onepercent*2){
-                final Simulator sim = new Simulator(blksz, pfsz,-1, pid, crp, null, null, false);
+                final Simulate sim = new Simulate(blksz, pfsz,-1, pid, crp, null, null, false);
                 sim.initialPreLoad();
                 sim.simulate();
                 System.out.println(sim.getHitRate());
@@ -665,8 +662,8 @@ public class Simulator {
         
         System.out.println("Trying out different cache replacment policies...");
         for(CacheReplacement.Policy crtst :CacheReplacement.Policy.values()){
-            final Simulator sim = 
-                new Simulator(maxsim.blocksize, maxsim.prefetchsize,
+            final Simulate sim = 
+                new Simulate(maxsim.blocksize, maxsim.prefetchsize,
                         -1, pid, crtst, null, null, false);
             sim.initialPreLoad();
             sim.simulate();
@@ -692,7 +689,7 @@ public class Simulator {
 
     public void outputFileDist() {
 
-        csvWriter = new CsvWriter(result_dir + filename + "_filedist.csv");
+        csvWriter = new CsvWriter("Results/" + filename + "_filedist.csv");
         csvWriter.setComment('#');
         try {
             // csvWriter.write("# number of hit, misses and time stayed in Cache for every file");

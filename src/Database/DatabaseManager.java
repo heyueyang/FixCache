@@ -55,6 +55,45 @@ public class DatabaseManager {
             System.exit(0);
         }
     }
+    //*
+    private DatabaseManager(String props, String db) {
+        File file = new File(props);
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(file);
+            Properties prop = new Properties();
+            prop.load(fis);
+            //Enumeration enums = prop.propertyNames(); 
+            drivername = (String) prop.get("Driver");
+            //databasename = (String) prop.get("URL");
+            databasename = db;
+            username = (String) prop.get("UserName");
+            password = (String) prop.get("UserPass");
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (fis != null)
+                try {
+                    fis.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+        }
+
+        try {
+            Class.forName(drivername).newInstance();
+            conn = DriverManager
+                    .getConnection(databasename, username, password);
+            stmt = conn.createStatement();
+
+        } catch (Exception e) {
+            System.out.println(e);
+            System.exit(0);
+        }
+    }
     
     public static Connection getTestConnection() {
         if (dbManager == null) {
@@ -66,6 +105,13 @@ public class DatabaseManager {
     public static Connection getConnection() {
         if (dbManager == null) {
             dbManager = new DatabaseManager("database.properties");
+        }
+        return dbManager.conn;
+    }
+    //*
+    public static Connection getConnection(String db) {
+        if (dbManager == null) {
+            dbManager = new DatabaseManager("database.properties", db);
         }
         return dbManager.conn;
     }

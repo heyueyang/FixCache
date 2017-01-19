@@ -19,8 +19,9 @@ public class CoChange {
      */
     final static Connection conn = DatabaseManager.getConnection();
     static final String findCommitId = "SELECT commit_id from actions, scmlog " +
-            "where file_id=? and actions.commit_id=scmlog.id and date between ? and ?";
+            "where file_id=? and actions.commit_id=scmlog.id and commit_date between ? and ?";//find all commit_id that file_id is fix between specific period
     static final String findCochangeFileId = "SELECT actions.file_id from actions, file_types where commit_id =? and actions.file_id=file_types.file_id and file_types.type='code'";
+  //find all file_id that commit_id is fix
     private static PreparedStatement findCommitIdQuery;
     private static PreparedStatement findCochangeFileIdQuery;
 
@@ -66,7 +67,8 @@ public class CoChange {
     // commitDate
     private CoChangeFileMap buildCoChangeMap(String startDate, String commitDate) {
         CoChangeFileMap coChangeCounts = new CoChangeFileMap();
-
+        //对于特定的file_id，查找从初始commit_date到当前commit_date之间的，更改了该file_id的所有commit_id
+        //也即找到当前时间以前，和file_id一起更改的那些file_id并且统计一起更改的次数
         // get a list of all prior commits for fileID before commitID:
         final PreparedStatement commitIdQuery = getCommitIdStatement();
         ArrayList<Integer> commitList = new ArrayList<Integer>();
@@ -79,14 +81,14 @@ public class CoChange {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
+        //遍历这些commit_id
         // for each commit in the list, get a list of all fileIDs involved in
         // that commit
         int coChangeCommitID;
         ResultSet r2;
         int coChangeFile;
         final PreparedStatement cochangeFileIdQuery = getCochangeFileIdStatement();
-        for (int i = 0; i < commitList.size(); i++) {
+        for (int i = 0; i < commitList.size(); i++) {//对于每一个commit_id，找到所有发生更改的file_id
             coChangeCommitID = commitList.get(i);
             try {
                 cochangeFileIdQuery.setInt(1, coChangeCommitID);
@@ -95,7 +97,7 @@ public class CoChange {
                     coChangeFile = r2.getInt(1);
                     if (coChangeFile != fileID) {
                         // coChangeList.add(r2.getInt(1));
-                        coChangeCounts.add(coChangeFile);
+                        coChangeCounts.add(coChangeFile);//记录该file_id发生更改的次数
                     }
                 }
             } catch (SQLException e) {
@@ -128,6 +130,7 @@ public class CoChange {
          * if it is not there, create a new entry else ++count
          * @param f -- file id 
          */
+        //这个map记录了file_id和它出现的次数，也即在当前commit_date之前发生过更改的文件，与其更改次数之间的映射
         void add(int f) {
             if (map.containsKey(f)) {
                 int count = map.get(f);
@@ -135,7 +138,7 @@ public class CoChange {
             } else
                 map.put(f, 1);
         }
-
+        //按照更改次数进行降序排序，返回更改次数最多的几条file_id
         // TODO: when two files have the same cochange count, use loc to break ties
         ArrayList<Integer> getTopFiles(int blocksize) {
             ArrayList<Map.Entry<Integer, Integer>> list = 
