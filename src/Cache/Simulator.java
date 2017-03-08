@@ -1,6 +1,5 @@
 package Cache;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -19,27 +18,25 @@ public class Simulator {
      * Database prepared sql statements.
      */
 
-    static final String findCommit = "select id, commit_date, is_bug_fix from scmlog "
-        + "where repository_id =? and commit_date between ? and ? order by commit_date ASC";//查找scmlog表中出指定时间段内所有的commit记录，按照时间从前到后排序
+    static final String findCommit = "select id, date, is_bug_fix from scmlog "
+        + "where repository_id =? and date between ? and ? order by date ASC";
     static final String findFile = "select actions.file_id, type from actions, content_loc "
         + "where actions.file_id=content_loc.file_id "
         + "and actions.commit_id=? and content_loc.commit_id=? "
         + "and actions.file_id in( "
-        + "select file_id from file_types where type='code') order by loc DESC";//查找出指定commit_id下，所有的action记录，按照文件源码行数降序排序
-    static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";//查找hunk表中是否有指定file_id和commit_id的记录
-    static final String findBugIntroCdate = "select commit_date from hunk_blames, scmlog "
-        + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";//查找指定hunk_id，该hunk出现的commit发生的时间
-    static final String findPid = "select id from repositories where id=?";//查找是否有指定id的工程
+        + "select file_id from file_types where type='code') order by loc DESC";
+    static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";
+    static final String findBugIntroCdate = "select date from hunk_blames, scmlog "
+        + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";
+    static final String findPid = "select id from repositories where id=?";
     static final String findFileCount = "select count(files.id) from files, file_types "
-        + "where files.id = file_types.file_id and type = 'code' and repository_id=?";//查找指定id的工程中，所有的file_id的个数
+        + "where files.id = file_types.file_id and type = 'code' and repository_id=?";
     private static PreparedStatement findCommitQuery;
     private static PreparedStatement findFileQuery;
     private static PreparedStatement findHunkIdQuery;
     static PreparedStatement findBugIntroCdateQuery;
     static PreparedStatement findPidQuery;
     static PreparedStatement findFileCountQuery;
-    static String[] projects = {"ant","camel"};
-    static String result_dir = "Results/";
 
     /**
      * From the actions table. See the cvsanaly manual
@@ -60,7 +57,7 @@ public class Simulator {
     final boolean saveToFile; // whether there should be csv output
     final CacheReplacement.Policy cacheRep; // cache replacement policy
     final Cache cache; // the cache
-    static Connection conn = DatabaseManager.getConnection(); // for database
+    final static Connection conn = DatabaseManager.getConnection(); // for database
 
     int hit;
     int miss;
@@ -82,36 +79,36 @@ public class Simulator {
         int onepercent = getPercentOfFiles(pid);
 
         if (bsize == -1)
-            blocksize = onepercent*5;//默认的blocksize为总文件数量的5%
+            blocksize = onepercent*5;
         else
             blocksize = bsize;
         if (csize == -1)
-            cachesize = onepercent*10; //默认的cachesize为总文件数量的10%
+            cachesize = onepercent*10; 
         else
             cachesize = csize;
         if (psize == -1)
-            prefetchsize = onepercent;//默认的prefetchsize为总文件数量的1%
+            prefetchsize = onepercent;
         else
             prefetchsize = psize;
 
         cacheRep = rep;
 
-        start = findFirstDate(start, pid);//获取最早日期
-        end = findLastDate(end, pid);//获取最晚日期
+        start = findFirstDate(start, pid);
+        end = findLastDate(end, pid);
 
 
         cache = new Cache(cachesize, new CacheReplacement(rep), start, end,
-                projid);//初始化cache
+                projid);
         outputDate = cache.startDate;
 
         hit = 0;
         miss = 0;
         this.saveToFile = save;
-        //如果结果要输出到文件，设置文件路径以及注释的等内容
+
         if (saveToFile == true) {
             filename = pid + "_" + cachesize + "_" + blocksize + "_"
             + prefetchsize + "_" + cacheRep;
-            csvWriter = new CsvWriter(result_dir + filename + "_hitrate.csv");
+            csvWriter = new CsvWriter("Results/" + filename + "_hitrate.csv");
             csvWriter.setComment('#');
             try {
                 csvWriter.writeComment("hitrate for every 3 months, "
@@ -177,18 +174,18 @@ public class Simulator {
     // XXX move hit and miss to the cache?
     // could add if (reas == BugEntity) logic to add() code
     public void loadBuggyEntity(int fileId, int cid, String commitDate, String intro_cdate) {
-    	//System.out.println(fileId  + "->" + cid + ":" + commitDate + "---" + intro_cdate);
-        if (cache.contains(fileId))//计算是否命中
+
+        if (cache.contains(fileId))
             hit++; 
         else
             miss++;
 
-        cache.add(fileId, cid, commitDate, CacheItem.CacheReason.BugEntity);//时间局部性，将自身加入cache
+        cache.add(fileId, cid, commitDate, CacheItem.CacheReason.BugEntity);
 
         // add the co-changed files as well
         ArrayList<Integer> cochanges = CoChange.getCoChangeFileList(fileId,
                 cache.startDate, intro_cdate, blocksize);
-        cache.add(cochanges, cid, commitDate, CacheItem.CacheReason.CoChange);//空间局部性，将co-change的记录加入cache
+        cache.add(cochanges, cid, commitDate, CacheItem.CacheReason.CoChange);
     }
 
     /**
@@ -214,8 +211,8 @@ public class Simulator {
             findCommitQuery.setString(3, cache.endDate);
 
             // returns all commits to pid after cache.startDate
-            allCommits = findCommitQuery.executeQuery();//获取scmlog表中，该工程的所有commit记录
-            //遍历所有commit记录
+            allCommits = findCommitQuery.executeQuery();
+
             while (allCommits.next()) {
                 commits++;
                 cid = allCommits.getInt(1);
@@ -227,7 +224,7 @@ public class Simulator {
 
                 final ResultSet files = findFileQuery.executeQuery();
                 // loop through those file ids
-                while (files.next()) {//遍历该commit_id涉及的所有action
+                while (files.next()) {
                     file_id = files.getInt(1);
                     type = FileType.valueOf(files.getString(2));
                     numprefetch = processOneFile(cid, cdate, isBugFix, file_id,
@@ -280,21 +277,21 @@ public class Simulator {
         case R:
         case C:
         case A:
-            if (numprefetch < prefetchsize) {//添加局部性
-                numprefetch++;//预加载计数器加1
-                cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);//将该条记录加入cache
+            if (numprefetch < prefetchsize) {
+                numprefetch++;
+                cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);
             }
             break;
         case D:
             if(cache.contains(file_id)){
-                this.cache.remove(file_id, cdate);//如果文件被删除，要从cache中移除
+                this.cache.remove(file_id, cdate);
             }
             break;
         case M: // modified
-            if (isBugFix) {//如果这条记录是修复bug的记录
-                String intro_cdate = this.getBugIntroCdate(file_id, cid);//获取该bug被引入的日期
-                this.loadBuggyEntity(file_id, cid, cdate, intro_cdate);//向cache中加载，引入日期的相应的记录
-            } else if (numprefetch < prefetchsize) {//更改局部性
+            if (isBugFix) {
+                String intro_cdate = this.getBugIntroCdate(file_id, cid);
+                this.loadBuggyEntity(file_id, cid, cdate, intro_cdate);
+            } else if (numprefetch < prefetchsize) {
                 numprefetch++;
                 cache.add(file_id, cid, cdate, CacheItem.CacheReason.Prefetch);
             }
@@ -323,10 +320,10 @@ public class Simulator {
      * input: pre-fetch size
      */
     public void initialPreLoad() {
-    	//按照初始时刻文件源码的行数代销降序排序，将文件行数最大的那些加载进内存
+
         final String findInitialPreload = "select content_loc.file_id, content_loc.commit_id "
             + "from content_loc, scmlog, actions, file_types "
-            + "where repository_id=? and content_loc.commit_id = scmlog.id and commit_date =? "
+            + "where repository_id=? and content_loc.commit_id = scmlog.id and date =? "
             + "and content_loc.file_id=actions.file_id "
             + "and content_loc.commit_id=actions.commit_id and actions.type!='D' "
             + "and file_types.file_id=content_loc.file_id and file_types.type='code' order by loc DESC";
@@ -370,11 +367,11 @@ public class Simulator {
         String firstDate = "";
         try {
             if (start == null) {
-                findFirstDate = "select min(commit_date) from scmlog where repository_id=?";
+                findFirstDate = "select min(date) from scmlog where repository_id=?";
                 findFirstDateQuery = conn.prepareStatement(findFirstDate);
                 findFirstDateQuery.setInt(1, pid);
             } else {
-                findFirstDate = "select min(commit_date) from scmlog where repository_id=? and commit_date >=?";
+                findFirstDate = "select min(date) from scmlog where repository_id=? and date >=?";
                 findFirstDateQuery = conn.prepareStatement(findFirstDate);
                 findFirstDateQuery.setInt(1, pid);
                 findFirstDateQuery.setString(2, start);
@@ -403,11 +400,11 @@ public class Simulator {
         String lastDate = null;
         try {
             if (end == null) {
-                findLastDate = "select max(commit_date) from scmlog where repository_id=?";
+                findLastDate = "select max(date) from scmlog where repository_id=?";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
                 findLastDateQuery.setInt(1, pid);
             } else {
-                findLastDate = "select max(commit_date) from scmlog where repository_id=? and commit_date <=?";
+                findLastDate = "select max(date) from scmlog where repository_id=? and date <=?";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
                 findLastDateQuery.setInt(1, pid);
                 findLastDateQuery.setString(2, end);
@@ -535,7 +532,7 @@ public class Simulator {
             printUsage();
             System.exit(2);
         }
-        //设置参数
+
         Integer blksz = (Integer) parser.getOptionValue(blksz_opt, -1);
         Integer csz = (Integer) parser.getOptionValue(csz_opt, -1);
         Integer pfsz = (Integer) parser.getOptionValue(pfsz_opt, -1);
@@ -566,40 +563,31 @@ public class Simulator {
          * Create a new simulator and run simulation.
          */
         Simulator sim;
-        for(int i = 0 ; i < projects.length; i++){
-        	System.out.println("===============" + projects[i] + "=================");
-        	conn = DatabaseManager.getConnection(projects[i]); 	//*
-            result_dir = "Results/" + projects[i] + "2/";		//*
-            if(!new File(result_dir).exists()){					//*
-            	new File(result_dir).mkdirs();					//*
-            }													//*
-            
-	        //调整参数
-	        if(tune)
-	        {
-	            System.out.println("tuning...");
-	            sim = tune(pid);
-	            System.out.println(".... finished tuning!");
-	            System.out.println("highest hitrate:"+sim.getHitRate());
-	        }
-	        else
-	        {
-	            sim = new Simulator(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
-	            sim.initialPreLoad();//预加载
-	            sim.simulate();//进行仿真
-	            //保存结果
-	            if(sim.saveToFile==true)
-	            {
-	                sim.csvWriter.close();
-	                sim.outputFileDist();
-	            }
-	
-	        }
-	
-	        // should always happen
-	        //sim.close();
-	        printSummary(sim);
+
+        if(tune)
+        {
+            System.out.println("tuning...");
+            sim = tune(pid);
+            System.out.println(".... finished tuning!");
+            System.out.println("highest hitrate:"+sim.getHitRate());
         }
+        else
+        {
+            sim = new Simulator(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
+            sim.initialPreLoad();
+            sim.simulate();
+
+            if(sim.saveToFile==true)
+            {
+                sim.csvWriter.close();
+                sim.outputFileDist();
+            }
+
+        }
+
+        // should always happen
+        sim.close();
+        printSummary(sim);
     }
 
 
@@ -692,7 +680,7 @@ public class Simulator {
 
     public void outputFileDist() {
 
-        csvWriter = new CsvWriter(result_dir + filename + "_filedist.csv");
+        csvWriter = new CsvWriter("Results/" + filename + "_filedist.csv");
         csvWriter.setComment('#');
         try {
             // csvWriter.write("# number of hit, misses and time stayed in Cache for every file");

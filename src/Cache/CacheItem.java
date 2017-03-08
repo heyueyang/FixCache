@@ -47,7 +47,7 @@ public class CacheItem {
     }
 
     private final int entityId; // id of file
-    private int loadDate; //represents repo time when a file is added to cache
+    private int loadDate; // changed on cache hit
     private int LOC; // changed on cache hit
     private int number; // represents either the number of bugs, changes, or authors
     private int loadCount = 0; //count how many time a file is put into cache 

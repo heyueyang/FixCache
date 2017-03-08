@@ -55,45 +55,6 @@ public class DatabaseManager {
             System.exit(0);
         }
     }
-    //*
-    private DatabaseManager(String props, String db) {
-        File file = new File(props);
-        FileInputStream fis = null;
-        try {
-            fis = new FileInputStream(file);
-            Properties prop = new Properties();
-            prop.load(fis);
-            //Enumeration enums = prop.propertyNames(); 
-            drivername = (String) prop.get("Driver");
-            //databasename = (String) prop.get("URL");
-            databasename = db;
-            username = (String) prop.get("UserName");
-            password = (String) prop.get("UserPass");
-
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (fis != null)
-                try {
-                    fis.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-        }
-
-        try {
-            Class.forName(drivername).newInstance();
-            conn = DriverManager
-                    .getConnection(databasename, username, password);
-            stmt = conn.createStatement();
-
-        } catch (Exception e) {
-            System.out.println(e);
-            System.exit(0);
-        }
-    }
     
     public static Connection getTestConnection() {
         if (dbManager == null) {
@@ -105,13 +66,6 @@ public class DatabaseManager {
     public static Connection getConnection() {
         if (dbManager == null) {
             dbManager = new DatabaseManager("database.properties");
-        }
-        return dbManager.conn;
-    }
-    //*
-    public static Connection getConnection(String db) {
-        if (dbManager == null) {
-            dbManager = new DatabaseManager("database.properties", db);
         }
         return dbManager.conn;
     }
@@ -147,7 +101,7 @@ public class DatabaseManager {
                 ResultSet r2 = stmt2
                         .executeQuery("select file_id from actions where commit_id =" + commitId);
                 while (r2.next()) {
-                    System.out.println(r2.getInt(1));
+                    System.out.print(r2.getInt(1));
                 }
             }
         } catch (Exception e) {

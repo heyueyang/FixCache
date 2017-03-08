@@ -213,8 +213,7 @@ public class Cache implements Iterable<CacheItem>{
     }
 
     public int getTime() {
-        //return time++;
-    	return (int) System.currentTimeMillis();
+        return time++;
     }
     
     public int getTotalDuration(){
