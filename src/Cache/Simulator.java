@@ -18,15 +18,15 @@ public class Simulator {
      * Database prepared sql statements.
      */
 
-    static final String findCommit = "select id, date, is_bug_fix from scmlog "
-        + "where repository_id =? and date between ? and ? order by date ASC";
+    static final String findCommit = "select id, commit_date, is_bug_fix from scmlog "
+        + "where repository_id =? and commit_date between ? and ? order by commit_date ASC";
     static final String findFile = "select actions.file_id, type from actions, content_loc "
         + "where actions.file_id=content_loc.file_id "
         + "and actions.commit_id=? and content_loc.commit_id=? "
         + "and actions.file_id in( "
         + "select file_id from file_types where type='code') order by loc DESC";
     static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";
-    static final String findBugIntroCdate = "select date from hunk_blames, scmlog "
+    static final String findBugIntroCdate = "select commit_date from hunk_blames, scmlog "
         + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";
     static final String findPid = "select id from repositories where id=?";
     static final String findFileCount = "select count(files.id) from files, file_types "
@@ -323,7 +323,7 @@ public class Simulator {
 
         final String findInitialPreload = "select content_loc.file_id, content_loc.commit_id "
             + "from content_loc, scmlog, actions, file_types "
-            + "where repository_id=? and content_loc.commit_id = scmlog.id and date =? "
+            + "where repository_id=? and content_loc.commit_id = scmlog.id and commit_date =? "
             + "and content_loc.file_id=actions.file_id "
             + "and content_loc.commit_id=actions.commit_id and actions.type!='D' "
             + "and file_types.file_id=content_loc.file_id and file_types.type='code' order by loc DESC";
@@ -367,11 +367,11 @@ public class Simulator {
         String firstDate = "";
         try {
             if (start == null) {
-                findFirstDate = "select min(date) from scmlog where repository_id=?";
+                findFirstDate = "select min(commit_date) from scmlog where repository_id=?";
                 findFirstDateQuery = conn.prepareStatement(findFirstDate);
                 findFirstDateQuery.setInt(1, pid);
             } else {
-                findFirstDate = "select min(date) from scmlog where repository_id=? and date >=?";
+                findFirstDate = "select min(commit_date) from scmlog where repository_id=? and commit_date >=?";
                 findFirstDateQuery = conn.prepareStatement(findFirstDate);
                 findFirstDateQuery.setInt(1, pid);
                 findFirstDateQuery.setString(2, start);
@@ -400,11 +400,11 @@ public class Simulator {
         String lastDate = null;
         try {
             if (end == null) {
-                findLastDate = "select max(date) from scmlog where repository_id=?";
+                findLastDate = "select max(commit_date) from scmlog where repository_id=?";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
                 findLastDateQuery.setInt(1, pid);
             } else {
-                findLastDate = "select max(date) from scmlog where repository_id=? and date <=?";
+                findLastDate = "select max(commit_date) from scmlog where repository_id=? and date <=?";
                 findLastDateQuery = conn.prepareStatement(findLastDate);
                 findLastDateQuery.setInt(1, pid);
                 findLastDateQuery.setString(2, end);
