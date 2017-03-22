@@ -221,8 +221,9 @@ public class CacheItem {
             if (findLocQuery == null)
                 findLocQuery = conn.prepareStatement(findLoc);
             findLocQuery.setInt(1, eid);
-            findLocQuery.setInt(2, cid);
+            findLocQuery.setInt(2, cid);         
             ret = Util.Database.getIntResult(findLocQuery);
+            //System.out.println("select loc from content_loc where file_id="+eid+" and commit_id ="+cid+";--->" + ret);
         } catch (SQLException e1) {
             e1.printStackTrace();
         }

@@ -1,5 +1,6 @@
 package Cache;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -26,7 +27,7 @@ public class Simulator {
         + "and actions.file_id in( "
         + "select file_id from file_types where type='code') order by loc DESC";
     static final String findHunkId = "select id from hunks where file_id =? and commit_id =?";
-    static final String findBugIntroCdate = "select commit_date from hunk_blames, scmlog "
+    static final String findBugIntroCdate = "select commit_date,scmlog.id from hunk_blames, scmlog "
         + "where hunk_id =? and hunk_blames.bug_commit_id=scmlog.id";
     static final String findPid = "select id from repositories where id=?";
     static final String findFileCount = "select count(files.id) from files, file_types "
@@ -218,7 +219,7 @@ public class Simulator {
                 cid = allCommits.getInt(1);
                 cdate = allCommits.getString(2);
                 isBugFix = allCommits.getBoolean(3);
-
+                //System.out.println("--->" + cid);
                 findFileQuery.setInt(1, cid);
                 findFileQuery.setInt(2, cid);
 
@@ -226,6 +227,7 @@ public class Simulator {
                 // loop through those file ids
                 while (files.next()) {
                     file_id = files.getInt(1);
+                    //System.out.println(file_id);
                     type = FileType.valueOf(files.getString(2));
                     numprefetch = processOneFile(cid, cdate, isBugFix, file_id,
                             type, numprefetch);
@@ -447,6 +449,7 @@ public class Simulator {
                 while (r1.next()) {
                     if (r1.getString(1).compareTo(bugIntroCdate) > 0) {
                         bugIntroCdate = r1.getString(1);
+                        //System.out.println("intro commit : " + r1.getString(2));
                     }
                 }
             }
@@ -562,6 +565,7 @@ public class Simulator {
         /**
          * Create a new simulator and run simulation.
          */
+        
         Simulator sim;
 
         if(tune)
@@ -574,6 +578,7 @@ public class Simulator {
         else
         {
             sim = new Simulator(blksz, pfsz, csz, pid, crp, start, end, saveToFile);
+            printSummary(sim);
             sim.initialPreLoad();
             sim.simulate();
 
@@ -584,7 +589,7 @@ public class Simulator {
             }
 
         }
-
+        System.out.println("------------------------------");
         // should always happen
         sim.close();
         printSummary(sim);
@@ -706,6 +711,7 @@ public class Simulator {
             // write out record
             //XXX rewrite with built in iteratable
             for (CacheItem ci : cache){
+            	if(!ci.isInCache()) continue;
                 csvWriter.write(Integer.toString(ci.getEntityId()));
                 csvWriter.write(Integer.toString(ci.getLOC())); // LOC at time of last update
                 csvWriter.write(Integer.toString(ci.getLoadCount()));
